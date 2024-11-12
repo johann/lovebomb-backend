@@ -1,0 +1,24 @@
+defmodule Lovebomb.Accounts.Profile do
+  use Ecto.Schema
+  import Ecto.Changeset
+
+  @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
+  schema "profiles" do
+    field :display_name, :string
+    field :bio, :string
+    field :avatar_url, :string
+    field :preferences, :map, default: %{}
+
+    belongs_to :user, Lovebomb.Accounts.User
+
+    timestamps()
+  end
+
+  def changeset(profile, attrs) do
+    profile
+    |> cast(attrs, [:display_name, :bio, :avatar_url, :preferences])
+    |> validate_required([:display_name])
+    |> validate_length(:bio, max: 500)
+  end
+end
