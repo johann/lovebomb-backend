@@ -175,12 +175,6 @@ defmodule Lovebomb.Accounts do
     end
   end
 
-  def check_status_achievements(rep, updated_partnership) do
-    # TODO
-  end
-
-  def check_interaction_achievements
-
   @doc """
   Updates partnership settings with validation and notification.
 
@@ -353,21 +347,226 @@ defmodule Lovebomb.Accounts do
     |> Enum.reject(&(&1 in partnership.achievements))
   end
 
-  def check_interaction_achievements(partnership) do
-    # TODO
-  end
+  @doc """
+Checks and awards interaction-based achievements for a partnership.
+"""
+def check_interaction_achievements(partnership) do
+  total_interactions = partnership.interaction_count || 0
+  daily_interactions = get_daily_interactions_count(partnership.id)
+  weekly_interactions = get_weekly_interactions_count(partnership.id)
 
-  def check_streak_achievements(partnership) do
-    # Todo
-  end
+  achievements = []
+  |> maybe_add_achievement(:first_interaction, total_interactions >= 1)
+  |> maybe_add_achievement(:daily_engagement, daily_interactions >= 3)
+  |> maybe_add_achievement(:weekly_dedication, weekly_interactions >= 10)
+  |> maybe_add_achievement(:interaction_milestone_50, total_interactions >= 50)
+  |> maybe_add_achievement(:interaction_milestone_100, total_interactions >= 100)
+  |> maybe_add_achievement(:interaction_milestone_500, total_interactions >= 500)
 
-  def check_interaction_achievements do
-    # Todo
-  end
+  {:ok, achievements}
+end
 
-  def check_answer_achievements(partnership) do
-    # TODO
+@doc """
+Checks and awards streak-based achievements for a partnership.
+"""
+def check_streak_achievements(partnership) do
+  current_streak = partnership.streak_days || 0
+  longest_streak = partnership.longest_streak || 0
+
+  achievements = []
+  |> maybe_add_achievement(:streak_3_days, current_streak >= 3)
+  |> maybe_add_achievement(:streak_7_days, current_streak >= 7)
+  |> maybe_add_achievement(:streak_30_days, current_streak >= 30)
+  |> maybe_add_achievement(:streak_90_days, current_streak >= 90)
+  |> maybe_add_achievement(:longest_streak_30, longest_streak >= 30)
+  |> maybe_add_achievement(:longest_streak_100, longest_streak >= 100)
+
+  {:ok, achievements}
+end
+
+@doc """
+Checks and awards answer-based achievements for a partnership.
+"""
+def check_answer_achievements(partnership) do
+  stats = get_answer_statistics(partnership.id)
+
+  achievements = []
+  |> maybe_add_achievement(:first_answer, stats.total_answers >= 1)
+  |> maybe_add_achievement(:answer_streak_7, stats.current_answer_streak >= 7)
+  |> maybe_add_achievement(:answer_streak_30, stats.current_answer_streak >= 30)
+  |> maybe_add_achievement(:perfect_week, stats.perfect_week)
+  |> maybe_add_achievement(:varied_answers, stats.category_count >= 5)
+  |> maybe_add_achievement(:thoughtful_responder, stats.avg_length > 100)
+
+  {:ok, achievements}
+end
+
+@doc """
+Checks and awards status-based achievements for a partnership.
+"""
+def check_status_achievements(repo, updated_partnership) do
+  level = updated_partnership.partnership_level
+  days_active = Timex.diff(Date.utc_today(), updated_partnership.inserted_at, :days)
+
+  achievements = []
+  |> maybe_add_achievement(:partnership_started, true)
+  |> maybe_add_achievement(:level_5_reached, level >= 5)
+  |> maybe_add_achievement(:level_10_reached, level >= 10)
+  |> maybe_add_achievement(:level_20_reached, level >= 20)
+  |> maybe_add_achievement(:partnership_1_year, days_active >= 365)
+  |> maybe_add_achievement(:partnership_2_years, days_active >= 730)
+
+  Enum.each(achievements, fn achievement ->
+    award_achievement(repo, updated_partnership, achievement)
+  end)
+
+  {:ok, achievements}
+end
+
+# Private helper functions
+
+defp get_daily_interactions_count(partnership_id) do
+  today = Date.utc_today()
+
+  PartnershipInteraction
+  |> where([i], i.partnership_id == ^partnership_id)
+  |> where([i], fragment("date(inserted_at) = ?", ^today))
+  |> Repo.aggregate(:count, :id)
+end
+
+defp get_weekly_interactions_count(partnership_id) do
+  one_week_ago = DateTime.utc_now() |> DateTime.add(-7 * 24 * 60 * 60)
+
+  PartnershipInteraction
+  |> where([i], i.partnership_id == ^partnership_id)
+  |> where([i], i.inserted_at >= ^one_week_ago)
+  |> Repo.aggregate(:count, :id)
+end
+
+defp get_answer_statistics(partnership_id) do
+  current_streak_query = from a in Answer,
+    where: a.partnership_id == ^partnership_id,
+    order_by: [desc: :inserted_at],
+    select: %{
+      date: fragment("date(inserted_at)"),
+      skipped: a.skipped
+    }
+
+  answers = Repo.all(current_streak_query)
+
+  %{
+    total_answers: length(answers),
+    current_answer_streak: calculate_answer_streak(answers),
+    perfect_week: check_perfect_week(answers),
+    category_count: get_unique_category_count(partnership_id),
+    avg_length: calculate_average_answer_length(partnership_id)
+  }
+end
+
+defp calculate_answer_streak(answers) do
+  answers
+  |> Enum.take_while(& !&1.skipped)
+  |> length()
+end
+
+defp check_perfect_week(answers) do
+  today = Date.utc_today()
+  last_week = Date.add(today, -7)
+
+  answers
+  |> Enum.filter(fn answer ->
+    date = answer.date
+    Date.compare(date, last_week) in [:gt, :eq] &&
+    Date.compare(date, today) in [:lt, :eq] &&
+    !answer.skipped
+  end)
+  |> length() >= 7
+end
+
+defp get_unique_category_count(partnership_id) do
+  Answer
+  |> join(:inner, [a], q in assoc(a, :question))
+  |> where([a, _], a.partnership_id == ^partnership_id)
+  |> select([_, q], q.category)
+  |> distinct(true)
+  |> Repo.aggregate(:count)
+end
+
+defp calculate_average_answer_length(partnership_id) do
+  Answer
+  |> where([a], a.partnership_id == ^partnership_id)
+  |> where([a], not a.skipped)
+  |> select([a], avg(fragment("length(?)", a.content)))
+  |> Repo.one() || 0
+end
+
+defp maybe_add_achievement(achievements, type, true), do: [type | achievements]
+defp maybe_add_achievement(achievements, _type, false), do: achievements
+
+defp award_achievement(repo, partnership, achievement_type) do
+  # Check if achievement already exists
+  unless achievement_type in (partnership.achievements || []) do
+    # Get achievement data
+    achievement_data = get_achievement_data(achievement_type)
+
+    Multi.new()
+    |> Multi.update(:partnership, Partnership.changeset(partnership, %{
+      achievements: (partnership.achievements || []) ++ [achievement_type]
+    }))
+    |> Multi.run(:award_points, fn repo, %{partnership: updated_partnership} ->
+      award_points_to_users(repo, updated_partnership, achievement_data.points)
+    end)
+    |> Multi.run(:notify, fn _repo, %{partnership: updated_partnership} ->
+      notify_achievement(updated_partnership, achievement_type, achievement_data)
+      {:ok, updated_partnership}
+    end)
+    |> repo.transaction()
   end
+end
+
+defp award_points_to_users(repo, partnership, points) do
+  Multi.new()
+  |> Multi.update(:user, fn ->
+    user = repo.get!(User, partnership.user_id)
+    User.points_changeset(user, %{points: user.points + points})
+  end)
+  |> Multi.update(:partner, fn ->
+    partner = repo.get!(User, partnership.partner_id)
+    User.points_changeset(partner, %{points: partner.points + points})
+  end)
+  |> repo.transaction()
+end
+
+defp notify_achievement(partnership, achievement_type, achievement_data) do
+  PubSub.broadcast_achievement(
+    partnership.user_id,
+    achievement_type,
+    achievement_data
+  )
+
+  PubSub.broadcast_achievement(
+    partnership.partner_id,
+    achievement_type,
+    achievement_data
+  )
+end
+
+defp get_achievement_data(achievement_type) do
+  # You can move this to a separate module or config
+  %{
+    first_interaction: %{
+      title: "First Connection",
+      description: "Made your first interaction",
+      points: 10
+    },
+    daily_engagement: %{
+      title: "Daily Engaged",
+      description: "Made 3 or more interactions in a day",
+      points: 15
+    },
+    # Add more achievement definitions here...
+  }[achievement_type]
+end
 
   defp notify_status_change(partnership, new_status, reason) do
     PubSub.broadcast_partnership_status_change(%{

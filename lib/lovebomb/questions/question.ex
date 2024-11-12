@@ -9,7 +9,7 @@ defmodule Lovebomb.Questions.Question do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "questions" do
-    field :text, :string
+    field :content, :string
     field :difficulty_level, :integer
     field :score_value, :integer
     field :category, :string

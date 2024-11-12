@@ -26,6 +26,31 @@ defmodule Lovebomb.Accounts.Partnership do
     "consistent_partner"
   ]
 
+  @default_custom_settings %{
+    "notification_preferences" => %{
+      "answers" => true,
+      "daily_reminder" => true,
+      "achievements" => true
+    },
+    "privacy_settings" => %{
+      "share_streak" => true,
+      "share_achievements" => true
+    },
+    "display_preferences" => %{
+      "show_level" => true,
+      "show_streak" => true
+    }
+  }
+
+  @default_stats %{
+    "questions_answered" => 0,
+    "questions_skipped" => 0,
+    "total_interaction_time" => 0,
+    "average_response_time" => 0,
+    "category_preferences" => %{},
+    "monthly_activity" => %{}
+  }
+
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "partnerships" do
@@ -157,7 +182,7 @@ defmodule Lovebomb.Accounts.Partnership do
     partnership
     |> change()
     |> put_change(:last_interaction_date, today)
-    # |> update_counter(:interaction_count, 1)
+    |> put_change(:interaction_count, (partnership.interaction_count || 0) + 1)
     |> update_streak(today)
   end
 
