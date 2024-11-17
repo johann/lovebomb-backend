@@ -54,7 +54,7 @@ defmodule Lovebomb.Accounts.Partnership do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "partnerships" do
-    field :status, Ecto.Enum, values: [:pending, :active, :inactive, :blocked]
+    field :status, Ecto.Enum, values: [:pending, :active, :inactive, :blocked], default: :pending
     field :nickname, :string
     field :partnership_level, :integer, default: 1
     field :last_interaction_date, :date
@@ -64,36 +64,11 @@ defmodule Lovebomb.Accounts.Partnership do
     field :achievements, {:array, :string}, default: []
     field :mutual_answer_count, :integer, default: 0
     field :longest_streak, :integer, default: 0
+    field :custom_settings, :map, default: @default_custom_settings
+    field :stats, :map, default: @default_stats
 
-    # Custom settings for partnership
-    field :custom_settings, :map, default: %{
-      "notification_preferences" => %{
-        "answers" => true,
-        "daily_reminder" => true,
-        "achievements" => true
-      },
-      "privacy_settings" => %{
-        "share_streak" => true,
-        "share_achievements" => true
-      },
-      "display_preferences" => %{
-        "show_level" => true,
-        "show_streak" => true
-      }
-    }
-
-    # Stats tracking
-    field :stats, :map, default: %{
-      "questions_answered" => 0,
-      "questions_skipped" => 0,
-      "total_interaction_time" => 0,
-      "average_response_time" => 0,
-      "category_preferences" => %{},
-      "monthly_activity" => %{}
-    }
-
-    belongs_to :user, User
-    belongs_to :partner, User
+    belongs_to :user, User, type: :binary_id
+    belongs_to :partner, User, type: :binary_id
 
     has_many :interactions, PartnershipInteraction
     has_many :shared_answers, Answer, foreign_key: :partnership_id
@@ -102,16 +77,6 @@ defmodule Lovebomb.Accounts.Partnership do
     timestamps()
   end
 
-  @doc """
-  Creates a changeset for a new partnership or updates an existing one.
-
-  ## Parameters
-    - partnership: The current partnership struct (or %Partnership{} for new ones)
-    - attrs: The attributes to set/update
-
-  ## Returns
-    - Ecto.Changeset
-  """
   def changeset(partnership, attrs) do
     partnership
     |> cast(attrs, [
@@ -120,7 +85,7 @@ defmodule Lovebomb.Accounts.Partnership do
       :last_milestone, :achievements, :mutual_answer_count,
       :longest_streak, :custom_settings, :stats
     ])
-    |> validate_required([:status, :user_id, :partner_id])
+    |> validate_required([:user_id, :partner_id])
     |> validate_inclusion(:partnership_level, @partnership_levels)
     |> validate_inclusion(:status, [:pending, :active, :inactive, :blocked])
     |> validate_length(:nickname, max: 50)
@@ -131,18 +96,9 @@ defmodule Lovebomb.Accounts.Partnership do
     |> check_partner_self()
     |> validate_custom_settings()
     |> validate_stats()
+    |> put_default_status()
   end
 
-  @doc """
-  Creates a changeset specifically for updating partnership status.
-
-  ## Parameters
-    - partnership: The current partnership struct
-    - status: The new status to set
-
-  ## Returns
-    - Ecto.Changeset
-  """
   def status_changeset(partnership, status) do
     partnership
     |> cast(%{status: status}, [:status])
@@ -150,32 +106,12 @@ defmodule Lovebomb.Accounts.Partnership do
     |> validate_inclusion(:status, [:pending, :active, :inactive, :blocked])
   end
 
-  @doc """
-  Creates a changeset for updating partnership settings.
-
-  ## Parameters
-    - partnership: The current partnership struct
-    - settings: Map of settings to update
-
-  ## Returns
-    - Ecto.Changeset
-  """
   def settings_changeset(partnership, settings) do
     partnership
     |> cast(%{custom_settings: settings}, [:custom_settings])
     |> validate_custom_settings()
   end
 
-  @doc """
-  Creates a changeset for recording an interaction.
-
-  ## Parameters
-    - partnership: The current partnership struct
-    - attrs: Interaction attributes
-
-  ## Returns
-    - Ecto.Changeset
-  """
   def interaction_changeset(partnership, _attrs) do
     today = Date.utc_today()
 
@@ -281,5 +217,12 @@ defmodule Lovebomb.Accounts.Partnership do
 
     new_longest = max(new_streak, longest_streak)
     {new_streak, new_longest}
+  end
+
+  defp put_default_status(changeset) do
+    case get_field(changeset, :status) do
+      nil -> put_change(changeset, :status, :pending)
+      _ -> changeset
+    end
   end
 end

@@ -10,15 +10,14 @@ defmodule Lovebomb.Accounts.Profile do
     field :avatar_url, :string
     field :preferences, :map, default: %{}
 
-    belongs_to :user, Lovebomb.Accounts.User
+    belongs_to :user, Lovebomb.Accounts.User, type: :binary_id
 
     timestamps()
   end
 
   def changeset(profile, attrs) do
     profile
-    |> cast(attrs, [:display_name, :bio, :avatar_url, :preferences])
-    |> validate_required([:display_name])
-    |> validate_length(:bio, max: 500)
+    |> cast(attrs, [:display_name, :bio, :avatar_url, :preferences, :user_id])
+    |> validate_required([:display_name, :user_id])
   end
 end

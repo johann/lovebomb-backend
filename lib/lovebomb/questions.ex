@@ -23,6 +23,118 @@ defmodule Lovebomb.Questions do
     | :too_soon_to_repeat
     | :no_questions_available
 
+   @doc """
+  Creates a new question.
+
+  ## Parameters
+    - attrs: Map of attributes including:
+      - content: The question text (required)
+      - category: Question category (required)
+      - difficulty_level: Integer from 1-100 (required)
+      - min_level: Minimum user level required to receive this question
+      - max_level: Maximum user level for this question
+      - active: Boolean indicating if question is active
+      - tags: List of tag strings
+      - metadata: Map of additional metadata
+      - score_value: Points awarded for answering
+
+  ## Returns
+    - {:ok, question} on success
+    - {:error, changeset} on validation failure
+
+  ## Examples
+
+      iex> create_question(%{
+        content: "What's your favorite memory together?",
+        category: "relationship",
+        difficulty_level: 1,
+        min_level: 1,
+        active: true
+      })
+      {:ok, %Question{}}
+  """
+  def create_question(attrs \\ %{}) do
+    %Question{}
+    |> Question.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates an existing question.
+
+  Note: Updates to active questions should be handled carefully as they may
+  affect users who have already received or answered the question.
+  """
+  def update_question(%Question{} = question, attrs) do
+    question
+    |> Question.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Gets a question by ID.
+  Returns nil if question doesn't exist.
+  """
+  def get_question(id) do
+    Repo.get(Question, id)
+  end
+
+  @doc """
+  Gets a question by ID.
+  Raises Ecto.NoResultsError if question doesn't exist.
+  """
+  def get_question!(id) do
+    Repo.get!(Question, id)
+  end
+
+  @doc """
+  Soft deletes a question by marking it as inactive.
+  This preserves historical data while preventing the question from being shown to users.
+  """
+  def delete_question(%Question{} = question) do
+    update_question(question, %{active: false})
+  end
+
+  @doc """
+  Lists all questions with optional filtering.
+
+  ## Options
+    - category: Filter by category
+    - difficulty_level: Filter by difficulty level
+    - active: Filter by active status
+    - min_level/max_level: Filter by level range
+    - limit: Maximum number of results
+    - offset: Number of results to skip
+  """
+  def list_questions(opts \\ []) do
+    filters = Enum.reduce(opts, Question, fn
+      {:category, category}, query ->
+        from q in query, where: q.category == ^category
+
+      {:difficulty_level, level}, query ->
+        from q in query, where: q.difficulty_level == ^level
+
+      {:active, active}, query ->
+        from q in query, where: q.active == ^active
+
+      {:min_level, min}, query ->
+        from q in query, where: q.min_level >= ^min
+
+      {:max_level, max}, query ->
+        from q in query, where: q.max_level <= ^max
+
+      {:limit, limit}, query ->
+        from q in query, limit: ^limit
+
+      {:offset, offset}, query ->
+        from q in query, offset: ^offset
+
+      _unsupported, query -> query
+    end)
+
+    Repo.all(filters)
+  end
+
   # Question Management
 
   @doc """

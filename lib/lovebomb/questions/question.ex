@@ -11,9 +11,11 @@ defmodule Lovebomb.Questions.Question do
   schema "questions" do
     field :content, :string
     field :difficulty_level, :integer
-    field :score_value, :integer
     field :category, :string
-    field :tags, {:array, :string}
+    field :score_value, :integer, default: 10  # Default value added
+    field :min_level, :integer
+    field :max_level, :integer
+    field :tags, {:array, :string}, default: []
     field :active, :boolean, default: true
     field :language, :string, default: "en"
     field :author_type, :string, default: "system"
@@ -41,12 +43,24 @@ defmodule Lovebomb.Questions.Question do
 
   def changeset(question, attrs) do
     question
-    |> cast(attrs, [:text, :difficulty_level, :score_value, :category, :tags,
-                    :active, :language, :author_type, :metadata, :stats])
-    |> validate_required([:text, :difficulty_level, :score_value, :category])
+    |> cast(attrs, [
+      :content,
+      :difficulty_level,
+      :category,
+      :score_value,
+      :min_level,
+      :max_level,
+      :tags,
+      :active,
+      :language,
+      :author_type,
+      :metadata,
+      :stats
+    ])
+    |> validate_required([:content, :difficulty_level, :category])  # Removed score_value from required
     |> validate_inclusion(:difficulty_level, 1..100)
-    |> validate_inclusion(:score_value, 1..1000)
-    |> validate_length(:text, min: 10, max: 500)
+    |> validate_number(:score_value, greater_than: 0, less_than: 1001)
+    |> validate_length(:content, min: 10, max: 500)
     |> validate_metadata()
     |> validate_stats()
   end

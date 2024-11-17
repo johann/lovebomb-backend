@@ -5,7 +5,8 @@ defmodule Lovebomb.Accounts.PartnershipInteraction do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "partnership_interactions" do
-    field :interaction_type, Ecto.Enum, values: [:answer_shared, :reaction, :message, :achievement]
+    field :interaction_type, Ecto.Enum,
+      values: [:answer_shared, :reaction, :message, :achievement, :status_change]
     field :content, :map
     field :metadata, :map, default: %{}
 
