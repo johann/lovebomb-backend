@@ -86,6 +86,9 @@ defmodule Lovebomb.Accounts.Partnership do
       :longest_streak, :custom_settings, :stats
     ])
     |> validate_required([:user_id, :partner_id])
+    |> validate_number(:partnership_level, greater_than_or_equal_to: 1)
+    |> validate_number(:streak_days, greater_than_or_equal_to: 0)
+    |> validate_number(:interaction_count, greater_than_or_equal_to: 0)
     |> validate_inclusion(:partnership_level, @partnership_levels)
     |> validate_inclusion(:status, [:pending, :active, :inactive, :blocked])
     |> validate_length(:nickname, max: 50)

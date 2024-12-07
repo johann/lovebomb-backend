@@ -1,11 +1,15 @@
-# lib/lovebomb/achievements.ex
 defmodule Lovebomb.Achievements do
+  @moduledoc """
+  The Achievements context handles achievement tracking, granting, and related statistics.
+  """
+
   import Ecto.Query
   alias Lovebomb.Repo
-  alias Lovebomb.Accounts.{Partnership, User}
+  alias Lovebomb.Accounts.{Partnership, User, PartnershipInteraction}
   alias Lovebomb.Questions.Answer
   alias Lovebomb.Achievements.{Achievement, UserAchievement}
   alias Lovebomb.PubSub
+  alias Ecto.Multi
 
   @achievement_types %{
     interaction: %{
@@ -134,7 +138,7 @@ defmodule Lovebomb.Achievements do
   # Private Functions
 
   defp check_interaction_count(partnership) do
-    interaction_count = Repo.one(from i in "interactions",
+    interaction_count = Repo.one(from i in PartnershipInteraction,
       where: i.partnership_id == ^partnership.id,
       select: count(i.id))
 
@@ -149,21 +153,20 @@ defmodule Lovebomb.Achievements do
     today = Date.utc_today()
 
     # Get all interaction dates ordered by date
-    dates = Repo.all(from i in "interactions",
+    dates = Repo.all(from i in PartnershipInteraction,
       where: i.partnership_id == ^partnership.id,
       select: fragment("date(inserted_at)"),
       order_by: [desc: fragment("date(inserted_at)")])
-      |> Enum.map(&Date.from_iso8601!/1)
+      # |> Enum.map(&Date.from_iso8601!/1)
 
     calculate_streak(dates, today, 0)
   end
 
   defp calculate_streak([], _, streak), do: streak
   defp calculate_streak([date | rest], expected_date, streak) do
-    if Date.compare(date, expected_date) == :eq do
-      calculate_streak(rest, Date.add(expected_date, -1), streak + 1)
-    else
-      streak
+    case Date.compare(date, expected_date) do
+      :eq -> calculate_streak(rest, Date.add(expected_date, -1), streak + 1)
+      _ -> streak
     end
   end
 
@@ -216,6 +219,27 @@ defmodule Lovebomb.Achievements do
       end
     end
   end
+
+  defp update_achievement_stats(repo, user_id, achievement) do
+    user = repo.get!(User, user_id)
+
+    # Get current stats or initialize if empty
+    current_stats = user.stats || %{}
+
+    # Get current achievements list or initialize
+    current_achievements = current_stats["achievements"] || []
+
+    # Add new achievement to list
+    updated_stats = Map.put(current_stats, "achievements", [
+      achievement.achievement_type | current_achievements
+    ])
+
+    # Update the user with new stats
+    user
+    |> User.stats_changeset(%{stats: updated_stats})
+    |> repo.update()
+  end
+
 
   defp get_achievement_data(achievement_type) do
     @achievement_types

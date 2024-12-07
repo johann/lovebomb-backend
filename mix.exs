@@ -64,7 +64,8 @@ defmodule Lovebomb.MixProject do
       {:cors_plug, "~> 3.0"},         # CORS support
       {:hackney, "~> 1.18"},         # HTTP client
       {:timex, "~> 3.7.11"},         # Date/Time handling
-      {:ex_rated, "~> 2.1"}          # Rate limiting
+      {:ex_rated, "~> 2.1"},         # Rate limiting
+      {:ex_machina, "~> 2.7.0", only: :test}
     ]
   end
 

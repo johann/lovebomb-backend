@@ -29,12 +29,10 @@ defmodule Lovebomb.Questions.Answer do
     belongs_to :question, Lovebomb.Questions.Question
     belongs_to :partnership, Lovebomb.Accounts.Partnership
 
-    has_many :comments, Lovebomb.Questions.AnswerComment
-
     timestamps()
   end
 
-  def changeset(answer, attrs) do
+def changeset(answer, attrs) do
     answer
     |> cast(attrs, [:text, :skipped, :skip_reason, :visibility, :reactions,
                     :difficulty_rating, :metadata, :user_id, :question_id,

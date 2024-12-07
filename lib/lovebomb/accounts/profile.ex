@@ -19,5 +19,17 @@ defmodule Lovebomb.Accounts.Profile do
     profile
     |> cast(attrs, [:display_name, :bio, :avatar_url, :preferences, :user_id])
     |> validate_required([:display_name, :user_id])
+    |> ensure_string_keys_in_preferences()
+  end
+
+  defp ensure_string_keys_in_preferences(changeset) do
+    case get_change(changeset, :preferences) do
+      nil -> changeset
+      preferences ->
+        string_keyed_prefs = for {key, value} <- preferences, into: %{} do
+          {to_string(key), value}
+        end
+        put_change(changeset, :preferences, string_keyed_prefs)
+    end
   end
 end

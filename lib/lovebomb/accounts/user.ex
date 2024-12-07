@@ -24,6 +24,10 @@ defmodule Lovebomb.Accounts.User do
     has_many :answers, Lovebomb.Questions.Answer
     has_many :achievements, Lovebomb.Achievements.UserAchievement  # Add this association
 
+    field :interaction_count, :integer, default: 0
+    field :last_interaction_date, :date
+    field :stats, :map, default: %{}
+
     timestamps()
   end
 
@@ -51,6 +55,8 @@ defmodule Lovebomb.Accounts.User do
     |> validate_number(:highest_level, greater_than_or_equal_to: 1)
     |> validate_number(:questions_answered, greater_than_or_equal_to: 0)
     |> validate_number(:streak_days, greater_than_or_equal_to: 0)
+    |> validate_number(:interaction_count, greater_than_or_equal_to: 0)
+    |> validate_number(:streak_days, greater_than_or_equal_to: 0)
     |> unique_constraint(:email)
     |> unique_constraint(:username)
     |> put_password_hash()
@@ -63,25 +69,34 @@ defmodule Lovebomb.Accounts.User do
     |> validate_number(:points, greater_than_or_equal_to: 0)
   end
 
+  @doc """
+  Changeset for updating user statistics, including both
+  interaction stats and achievement-related stats.
+  """
   def stats_changeset(user, attrs) do
     user
     |> cast(attrs, [
+      # Answer/Question related
       :questions_answered,
       :streak_days,
       :last_answer_date,
       :level,
       :highest_level,
-      :current_score
+      :current_score,
+      # Interaction related
+      :interaction_count,
+      :last_interaction_date,
+      :stats,
+      # Achievement related
+      :points
     ])
     |> validate_required([
       :questions_answered,
-      :streak_days
+      :streak_days,
+      :interaction_count
     ])
-    |> validate_number(:questions_answered, greater_than_or_equal_to: 0)
-    |> validate_number(:streak_days, greater_than_or_equal_to: 0)
-    |> validate_number(:level, greater_than_or_equal_to: 1)
-    |> validate_number(:highest_level, greater_than_or_equal_to: 1)
-    |> validate_number(:current_score, greater_than_or_equal_to: 0)
+    |> validate_numbers()
+    |> validate_stats_map()
     |> update_highest_level()
   end
 
@@ -97,5 +112,49 @@ defmodule Lovebomb.Accounts.User do
         put_change(changeset, :highest_level, new_level)
       _ -> changeset
     end
+  end
+
+  # Add these new private functions
+  defp validate_numbers(changeset) do
+    changeset
+    |> validate_number(:questions_answered, greater_than_or_equal_to: 0)
+    |> validate_number(:streak_days, greater_than_or_equal_to: 0)
+    |> validate_number(:level, greater_than_or_equal_to: 1)
+    |> validate_number(:highest_level, greater_than_or_equal_to: 1)
+    |> validate_number(:current_score, greater_than_or_equal_to: 0)
+    |> validate_number(:interaction_count, greater_than_or_equal_to: 0)
+    |> validate_number(:points, greater_than_or_equal_to: 0)
+  end
+
+  defp validate_stats_map(changeset) do
+    case get_change(changeset, :stats) do
+      nil -> changeset
+      stats when not is_map(stats) ->
+        add_error(changeset, :stats, "must be a map")
+      stats ->
+        if valid_stats_structure?(stats) do
+          changeset
+        else
+          add_error(changeset, :stats, "has invalid structure")
+        end
+    end
+  end
+
+  defp valid_stats_structure?(stats) do
+    required_keys = [
+      "total_interactions",
+      "interaction_types",
+      "monthly_activity",
+      "achievements",
+      "question_categories",
+      "response_times"
+    ]
+
+    Enum.all?(required_keys, &Map.has_key?(stats, &1)) and
+      is_map(stats["interaction_types"]) and
+      is_map(stats["monthly_activity"]) and
+      is_list(stats["achievements"]) and
+      is_map(stats["question_categories"]) and
+      is_map(stats["response_times"])
   end
 end
